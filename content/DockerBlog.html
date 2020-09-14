@@ -1,0 +1,57 @@
+I've looked at a few times, but I never had much of a need in my workflow. Now though, I'm more interested - we've got a few microservices that need to be running for our main application. They each are run using Node.js, and the "simple" method is to just open a new terminal window for each, starting them up manually. Of course, that's something I forget to do until the main app's tests show failures.
+
+<a href="https://www.docker.com/">Docker</a> <img class="alignright size-full wp-image-2228" src="http://steven.vorefamily.net/wp-content/uploads/2020/09/Docker-Logo.png" alt="" width="279" height="131">Last week, after watching <a href="https://www.hanselman.com/">Scott Hanselman</a>'s Computer Stuff They Didn't Teach You video #8: <a href="https://www.youtube.com/watch?v=0oEsMwSxBsk">Containers? So What? Docker 101 Explained</a>, I got to thinking about better ways to have those Node servers running.
+
+The first thing I did was to put together a very simple <a href="https://nodejs.org/en/">Node</a> <img class="alignright size-full wp-image-2230" src="http://steven.vorefamily.net/wp-content/uploads/2020/09/Node.js-Logo.png" alt="Node.js logo" width="262" height="131">application, using Express to serve static html files. To follow along, install Node.js, then open Powershell in Windows Terminal or your favorite <a href="https://www.hanselman.com/blog/WhatsTheDifferenceBetweenAConsoleATerminalAndAShell.aspx">console</a>, and create a basic server app:
+<pre>md node-docker
+cd node-docker
+node init
+npm install express --save</pre>
+This creates a simple Node application, which I then edited to serve files from a specific directory. In this case, I created a <code>\content</code> folder at the root of my drive and put a simple <code>index.html</code> file there.
+[code language="javascript" title="server.js"]
+var express = require('express');
+var app = express();
+var port = process.env.PORT || 5000;
+var path = require('path');
+var options = {
+index: "index.html",
+extensions: ['htm', 'html']
+};
+
+app.use('/', express.static('/content', options));
+
+var server = app.listen(port, function () {
+var host = server.address().address;
+console.log('listening at http://%s:%s', host, port);
+});
+[/code]
+
+We can then start the little server using the command <code>node server.js</code>. Opening a browser to <code>http://localhost:5000/</code> displays the index file from the content directory. That's done via line 10, which basically maps the root directory of the webserver ('/') to the <code>\content</code> directory, and serves files from there. Control-C in the terminal will stop the server.
+
+Next, install <a href="https://www.docker.com/products/docker-desktop">Docker</a>. We'll need to create a <code>Dockerfile</code> file containing the instructions on how to build an image.
+
+[code title="Dockerfile"]FROM node:12
+WORKDIR \temp\dockerwork
+COPY package*.json ./
+RUN npm install
+COPY . .
+CMD ["node","server.js"]
+[/code]
+
+Docker's <code>build</code> command will use that to build an image:
+<pre>docker build --tag nodedock .</pre>
+You can use <code>docker images</code> to see a list of all the images you have on your system, at this point you should see at least your newly-build <code>nodedock</code> app and an image with Node version 12 itself.
+
+<img class="alignright" src="http://steven.vorefamily.net/wp-content/uploads/2020/09/docker_images.png" alt="docker's IMAGES command" width="600">
+
+If you were to start up that image now, the app would run but it would have no data - if you watched the video I mentioned above and look at the Dockerfile, you know that the image only contains the app - not the <code>\content</code> directory. I created it this way on purpose, because I want to have a server app running but I want to be able to create data (html files) ouside the app. This means we need give our container (running image) access to our hard disk.
+<pre>docker run -p 3000:5000 -v /c/content:/content --name nodedock --rm nodedock</pre>
+This command
+* runs our nodedock application,
+* maps it's port (<code>-p</code>) 5000 to docker's port 3000,
+* creates a volume (<code>-v</code>) that points to our <code>c:\content</code> directory and lets our Node app see it as <code>/content</code>
+* and removes the container when we stop it running (<code>--rm</code>).
+
+<img class="alignright" src="http://steven.vorefamily.net/wp-content/uploads/2020/09/DockerDesktop.png" alt="Docker Desktop" width="600">
+
+Now with that image running in our container, we can open a browser to <code>http://localhost:3000/</code>. We can open the Docker Desktop application to see all our containers, look at logs and other stats on each, and stop them when we don't need them. If we don't use the <code>-rm</code> flag, they'll stick around.

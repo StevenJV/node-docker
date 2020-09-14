@@ -7,9 +7,9 @@ var options = {
   extensions: ['htm', 'html']
 };
 
-app.use("/", express.static('/content', options));
+app.use('/', express.static('/content', options));
 
 var server = app.listen(port, function () {
   var host = server.address().address;
-  console.log('my app is listening at http://%s:%s (node port, not Docker port)', host, port);
+  console.log('listening at http://%s:%s', host, port);
 });
